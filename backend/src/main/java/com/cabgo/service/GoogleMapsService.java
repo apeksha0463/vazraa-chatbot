@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 public class GoogleMapsService {
 
-    @Value("${google.maps.api-key}")
+    @Value("${google.maps.api-key:}")
     private String apiKey;
 
     private final OkHttpClient httpClient = new OkHttpClient();
@@ -166,27 +166,29 @@ public class GoogleMapsService {
 
     /**
      * Get distance and duration between two lat/lng points.
+     * Falls back to Haversine immediately when API key is not configured.
      */
     public DistanceResult getDistance(double originLat, double originLng, double destLat, double destLng) {
-        String url = "https://maps.googleapis.com/maps/api/distancematrix/json" +
-            "?origins=" + originLat + "," + originLng +
-            "&destinations=" + destLat + "," + destLng +
-            "&units=metric" +
-            "&key=" + apiKey;
-
-        try {
-            JsonNode root = get(url);
-            JsonNode element = root.path("rows").get(0).path("elements").get(0);
-            String status = element.path("status").asText();
-            if ("OK".equals(status)) {
-                double distanceKm = element.path("distance").path("value").asDouble() / 1000.0;
-                int durationMinutes = (int) Math.ceil(element.path("duration").path("value").asDouble() / 60.0);
-                String distanceText = element.path("distance").path("text").asText();
-                String durationText = element.path("duration").path("text").asText();
-                return new DistanceResult(distanceKm, durationMinutes, distanceText, durationText);
+        if (apiKey != null && !apiKey.isBlank() && !apiKey.contains("YOUR_GOOGLE_MAPS")) {
+            String url = "https://maps.googleapis.com/maps/api/distancematrix/json" +
+                "?origins=" + originLat + "," + originLng +
+                "&destinations=" + destLat + "," + destLng +
+                "&units=metric" +
+                "&key=" + apiKey;
+            try {
+                JsonNode root = get(url);
+                JsonNode element = root.path("rows").get(0).path("elements").get(0);
+                String status = element.path("status").asText();
+                if ("OK".equals(status)) {
+                    double distanceKm = element.path("distance").path("value").asDouble() / 1000.0;
+                    int durationMinutes = (int) Math.ceil(element.path("duration").path("value").asDouble() / 60.0);
+                    String distanceText = element.path("distance").path("text").asText();
+                    String durationText = element.path("duration").path("text").asText();
+                    return new DistanceResult(distanceKm, durationMinutes, distanceText, durationText);
+                }
+            } catch (Exception e) {
+                log.error("Google Maps distance error", e);
             }
-        } catch (Exception e) {
-            log.error("Google Maps distance error", e);
         }
         // Fallback: Haversine estimation
         double dist = haversineKm(originLat, originLng, destLat, destLng);
@@ -196,8 +198,14 @@ public class GoogleMapsService {
 
     /**
      * Geocode an address string to lat/lng.
+     * Returns null immediately when API key is not configured so callers
+     * fall through to the seeded local-destination lookup.
      */
     public GeocodingResult geocode(String address) {
+        if (apiKey == null || apiKey.isBlank() || apiKey.contains("YOUR_GOOGLE_MAPS")) {
+            log.debug("GoogleMapsService.geocode(): API key not configured — skipping HTTP call");
+            return null;
+        }
         try {
             String encoded = URLEncoder.encode(address, StandardCharsets.UTF_8);
             String url = "https://maps.googleapis.com/maps/api/geocode/json?address=" + encoded + "&key=" + apiKey;

@@ -197,6 +197,14 @@ public class ChatSessionService {
             case FARE_EST_PICKUP -> handleFareEstPickup(session, messageType, text, locationLat, locationLng, locationName);
             case FARE_EST_DROP -> handleFareEstDrop(session, messageType, text, locationLat, locationLng, locationName);
             case FARE_EST_VEHICLE -> handleFareEstVehicle(session, text, replyId);
+
+            // Support — user is in support mode, redirect them back to main menu
+            case SUPPORT -> {
+                whatsAppService.sendText(fromPhone,
+                    "\uD83C\uDD98 *Vazraa Support*\n\nFor urgent help call: *+91-9035999800*\n" +
+                    "Email: support@vazraamobility.com\n\nType *menu* to return to main options.");
+                session.setState(ConversationState.MAIN_MENU);
+            }
             
             default -> {
                 // Unknown state — ask Gemini to reply naturally, then show menu hint
@@ -254,14 +262,17 @@ public class ChatSessionService {
 
     private void sendMainMenu(ChatSession session) {
         session.setState(ConversationState.MAIN_MENU);
-        String menuMsg = "Welcome to *Vazraa Cab Booking*! 🚖\n\n" +
-            "How can we help you today?\n" +
+        // Simple welcome greeting sent first
+        whatsAppService.sendText(session.getWhatsappPhone(),
+            "Hi! Welcome to Vazraa Mobility 👋 How can I help you today?");
+        // Follow immediately with the menu options
+        String menuMsg = "Here's what I can do for you:\n\n" +
             "1️⃣ *Book a Ride*\n" +
             "2️⃣ *View Ride History*\n" +
             "3️⃣ *Cancel Ride*\n" +
             "4️⃣ *Support / Help*\n" +
             "5️⃣ *Register as Driver*\n\n" +
-            "Reply with the number of your choice (e.g. 1) to proceed.";
+            "Reply with the number of your choice (e.g. *1*) to proceed.";
         whatsAppService.sendText(session.getWhatsappPhone(), menuMsg);
     }
 

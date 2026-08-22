@@ -39,7 +39,7 @@ public class WhatsAppService {
     @Value("${aisensy.user-name:Vazra mobility}")
     private String userName;
 
-    @Value("${aisensy.whatsapp-number}")
+    @Value("${aisensy.whatsapp-number:919035999800}")
     private String whatsappNumber;
 
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
