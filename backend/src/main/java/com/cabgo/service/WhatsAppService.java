@@ -88,8 +88,8 @@ public class WhatsAppService {
 
     /**
      * Build the AiSensy campaign-message payload.
-     * The message body goes into templateParams[0] so that the approved
-     * template {{1}} placeholder is replaced at delivery time.
+     * The message body is sanitized to remove newlines, tabs, and excessive whitespace
+     * so that Meta/AiSensy template parameter validation passes.
      */
     private Map<String, Object> buildPayload(String destination, String messageBody) {
         Map<String, Object> payload = new HashMap<>();
@@ -97,13 +97,28 @@ public class WhatsAppService {
         payload.put("campaignName",   campaignName);
         payload.put("destination",    destination);
         payload.put("userName",       userName);
-        payload.put("templateParams", List.of(messageBody));
+        payload.put("templateParams", List.of(sanitizeForAiSensy(messageBody)));
         payload.put("source",         "api");
         payload.put("media",          Map.of());
         payload.put("buttons",        List.of());
         payload.put("carouselCards",  List.of());
         payload.put("location",       Map.of());
         return payload;
+    }
+
+    /**
+     * Sanitizes dynamic message text for AiSensy template parameters:
+     * - Replaces newlines (\r, \n) and tabs with single spaces
+     * - Collapses multiple spaces into a single space
+     * - Trims the final string
+     * Meta/AiSensy rejects template parameters containing newlines, tabs, or >4 spaces.
+     */
+    public String sanitizeForAiSensy(String message) {
+        if (message == null) return "";
+        return message
+                .replaceAll("[\\r\\n\\t]+", " ")
+                .replaceAll(" {2,}", " ")
+                .trim();
     }
 
     /**
