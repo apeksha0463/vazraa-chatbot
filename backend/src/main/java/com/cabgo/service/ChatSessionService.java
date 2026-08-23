@@ -207,10 +207,18 @@ public class ChatSessionService {
             }
             
             default -> {
-                // Unknown state — ask Gemini to reply naturally, then show menu hint
-                log.info("Unknown state {} for phone {}, delegating to Gemini", session.getState(), fromPhone);
-                String geminiReply = geminiService.getReply(text.isEmpty() ? (interactiveReplyId != null ? interactiveReplyId : "") : text);
-                whatsAppService.sendText(fromPhone, geminiReply + "\n\nType *menu* to see all options.");
+                // Unknown state — reset to MAIN_MENU with clear instructions (no AI fallback)
+                log.info("Unknown state {} for phone {}, resetting to MAIN_MENU", session.getState(), fromPhone);
+                session.setState(ConversationState.MAIN_MENU);
+                whatsAppService.sendText(fromPhone,
+                    "Sorry, something went wrong. Let's start over.\n\n" +
+                    "What would you like to do?\n\n" +
+                    "1\uFE0F\u20E3 Book a Ride\n" +
+                    "2\uFE0F\u20E3 View Ride History\n" +
+                    "3\uFE0F\u20E3 Cancel Ride\n" +
+                    "4\uFE0F\u20E3 Support / Help\n" +
+                    "5\uFE0F\u20E3 Register as Driver\n\n" +
+                    "Reply with a number (1-5) to continue.");
             }
         }
         chatSessionRepository.save(session);
@@ -262,18 +270,16 @@ public class ChatSessionService {
 
     private void sendMainMenu(ChatSession session) {
         session.setState(ConversationState.MAIN_MENU);
-        // Simple welcome greeting sent first
-        whatsAppService.sendText(session.getWhatsappPhone(),
-            "Hi! Welcome to Vazraa Mobility 👋 How can I help you today?");
-        // Follow immediately with the menu options
-        String menuMsg = "Here's what I can do for you:\n\n" +
-            "1️⃣ *Book a Ride*\n" +
-            "2️⃣ *View Ride History*\n" +
-            "3️⃣ *Cancel Ride*\n" +
-            "4️⃣ *Support / Help*\n" +
-            "5️⃣ *Register as Driver*\n\n" +
-            "Reply with the number of your choice (e.g. *1*) to proceed.";
-        whatsAppService.sendText(session.getWhatsappPhone(), menuMsg);
+        String welcomeMsg = "Hi! Welcome to Vazraa Mobility 👋\n\n" +
+            "I can help you book a ride.\n\n" +
+            "What would you like to do?\n\n" +
+            "1️⃣ Book a Ride\n" +
+            "2️⃣ View Ride History\n" +
+            "3️⃣ Cancel Ride\n" +
+            "4️⃣ Support / Help\n" +
+            "5️⃣ Register as Driver\n\n" +
+            "Reply with a number (1-5) to continue.";
+        whatsAppService.sendText(session.getWhatsappPhone(), welcomeMsg);
     }
 
     private void handleMainMenu(ChatSession session, String text, String replyId) {
@@ -296,10 +302,17 @@ public class ChatSessionService {
             }
             case "5", "register", "driver" -> startDriverRegistration(session);
             default -> {
-                // Unrecognised menu input — let Gemini handle it naturally
-                log.info("Unrecognised main menu input '{}', delegating to Gemini", input);
-                String geminiReply = geminiService.getReply(text.isEmpty() ? input : text);
-                whatsAppService.sendText(session.getWhatsappPhone(), geminiReply + "\n\nType *menu* to see all options.");
+                // Unrecognised input — show numbered menu clearly (no AI fallback)
+                log.info("Unrecognised main menu input '{}' for phone {}", input, session.getWhatsappPhone());
+                whatsAppService.sendText(session.getWhatsappPhone(),
+                    "Sorry, I didn't understand that.\n\n" +
+                    "Please reply with:\n\n" +
+                    "1\uFE0F\u20E3 Book a Ride\n" +
+                    "2\uFE0F\u20E3 View Ride History\n" +
+                    "3\uFE0F\u20E3 Cancel Ride\n" +
+                    "4\uFE0F\u20E3 Support / Help\n" +
+                    "5\uFE0F\u20E3 Register as Driver\n\n" +
+                    "Example: Type 1 to book a ride.");
             }
         }
     }
@@ -318,7 +331,10 @@ public class ChatSessionService {
         session.setTempDuration(null);
         session.setRejectedDriverIds(new ArrayList<>());
 
-        whatsAppService.sendText(session.getWhatsappPhone(), "Please share your pickup location. 📍");
+        whatsAppService.sendText(session.getWhatsappPhone(),
+            "📍 Please share your pickup location.\n\n" +
+            "Type your area, landmark, or address.\n\n" +
+            "Example: Koramangala, Bangalore");
     }
 
     private void handlePickup(ChatSession session, String messageType, String text,
@@ -360,7 +376,10 @@ public class ChatSessionService {
         log.info("[ChatState] Transitioning user {} to AWAITING_DROP. Pickup set: {}", session.getWhatsappPhone(), session.getTempPickupAddress());
         session.setState(ConversationState.AWAITING_DROP);
         whatsAppService.sendText(session.getWhatsappPhone(),
-            "Pickup location confirmed. ✅\n\nNow share your drop location. 🎯");
+            "✅ Pickup confirmed: " + session.getTempPickupAddress() + "\n\n" +
+            "📍 Please enter your drop location.\n\n" +
+            "Type your area, landmark, or address.\n\n" +
+            "Example: Indiranagar, Bangalore");
     }
 
     private void handleDrop(ChatSession session, String messageType, String text,
@@ -747,8 +766,26 @@ public class ChatSessionService {
     }
 
     private void handlePaymentMethod(ChatSession session, String text, String replyId) {
-        whatsAppService.sendText(session.getWhatsappPhone(), "Please pay the driver cash or scan their UPI QR code. Type *menu* to restart.");
-        session.setState(ConversationState.MAIN_MENU);
+        String input = replyId.isEmpty() ? text.trim().toLowerCase() : replyId.toLowerCase();
+        if (input.equals("1") || input.contains("online") || input.contains("upi")) {
+            whatsAppService.sendText(session.getWhatsappPhone(),
+                "💳 Online Payment selected.\n\n" +
+                "Please pay via UPI or scan the QR code provided by your driver.\n\n" +
+                "Type menu to return to main menu.");
+            session.setState(ConversationState.MAIN_MENU);
+        } else if (input.equals("2") || input.contains("cash")) {
+            whatsAppService.sendText(session.getWhatsappPhone(),
+                "💵 Cash Payment selected.\n\n" +
+                "Please pay the driver directly in cash.\n\n" +
+                "Type menu to return to main menu.");
+            session.setState(ConversationState.MAIN_MENU);
+        } else {
+            whatsAppService.sendText(session.getWhatsappPhone(),
+                "💳 Please choose a payment method.\n\n" +
+                "1️⃣ Online Payment (UPI / QR Code)\n" +
+                "2️⃣ Cash\n\n" +
+                "Reply with 1 or 2.");
+        }
     }
 
     private void handleRating(ChatSession session, String text) {
@@ -1001,8 +1038,8 @@ public class ChatSessionService {
                 chatSessionRepository.save(session);
 
                 whatsAppService.sendText(session.getWhatsappPhone(),
-                    "🏁 *You have arrived!*\n\n" +
-                    "💰 Total Fare: *₹" + ride.getFare() + "*\n\n" +
+                    "🏁 You have arrived!\n\n" +
+                    "💰 Total Fare: ₹" + ride.getFare() + "\n\n" +
                     "Please pay the driver via Cash or UPI.\n\n" +
                     "⭐ How was your ride? Please rate from 1 to 5 stars (reply with a number).");
             }
