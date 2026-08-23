@@ -108,15 +108,18 @@ public class WhatsAppService {
 
     /**
      * Sanitizes dynamic message text for AiSensy template parameters:
-     * - Replaces newlines (\r, \n) and tabs with single spaces
-     * - Collapses multiple spaces into a single space
+     * - Replaces newlines (\r, \n) with clean bullet separators (" • ") for structured readability
+     * - Replaces tabs with spaces
+     * - Collapses multiple spaces / redundant separators
      * - Trims the final string
-     * Meta/AiSensy rejects template parameters containing newlines, tabs, or >4 spaces.
+     * Meta/AiSensy rejects template parameters containing newlines (\n), tabs, or >4 spaces.
      */
     public String sanitizeForAiSensy(String message) {
         if (message == null) return "";
         return message
-                .replaceAll("[\\r\\n\\t]+", " ")
+                .replaceAll("[\\r\\n]+", " • ")
+                .replaceAll("[\\t]+", " ")
+                .replaceAll("( \\u2022)+", " •")
                 .replaceAll(" {2,}", " ")
                 .trim();
     }
