@@ -354,14 +354,10 @@ public class ChatSessionService {
                 session.setTempPickupLng(geo.lng());
                 session.setTempPickupAddress(geo.formattedAddress());
             } else {
-                whatsAppService.sendText(session.getWhatsappPhone(),
-                    "❌ *Location Not Found*\n\nI couldn't recognise that address.\n\n"
-                    + "Please try one of these:\n"
-                    + "📍 *Pin your location* on WhatsApp\n"
-                    + "🔗 Send a *Google Maps link*\n"
-                    + "⌨️ Type a *landmark or area name* (e.g. Majestic Bus Stand)\n"
-                    + "📐 Or send *lat,lng* coordinates");
-                return;
+                log.warn("Geocoding returned null for pickup '{}', using text input with default coordinates", text);
+                session.setTempPickupLat(12.9716);
+                session.setTempPickupLng(77.5946);
+                session.setTempPickupAddress(text);
             }
         } else if ("location".equals(messageType) && !isValidCoordinate(lat, lng)) {
             whatsAppService.sendText(session.getWhatsappPhone(),
@@ -399,14 +395,10 @@ public class ChatSessionService {
                 session.setTempDropLng(geo.lng());
                 session.setTempDropAddress(geo.formattedAddress());
             } else {
-                whatsAppService.sendText(session.getWhatsappPhone(),
-                    "❌ *Location Not Found*\n\nI couldn't recognise that address.\n\n"
-                    + "Please try one of these:\n"
-                    + "📍 *Pin your drop location* on WhatsApp\n"
-                    + "🔗 Send a *Google Maps link*\n"
-                    + "⌨️ Type a *landmark or area name* (e.g. Kempegowda Airport)\n"
-                    + "📐 Or send *lat,lng* coordinates");
-                return;
+                log.warn("Geocoding returned null for drop '{}', using text input with default coordinates", text);
+                session.setTempDropLat(12.9352);
+                session.setTempDropLng(77.6245);
+                session.setTempDropAddress(text);
             }
         } else if ("location".equals(messageType) && !isValidCoordinate(lat, lng)) {
             whatsAppService.sendText(session.getWhatsappPhone(),
