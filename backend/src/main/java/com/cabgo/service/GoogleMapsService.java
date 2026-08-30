@@ -223,6 +223,44 @@ public class GoogleMapsService {
         return null;
     }
 
+    /**
+     * Reverse-geocode a lat/lng coordinate pair to a human-readable address.
+     * Called when a customer shares their WhatsApp live location (no address text is provided,
+     * only coordinates). Falls back to a coordinate string if the API key is not configured
+     * or the API call fails.
+     *
+     * @param lat Latitude from the WhatsApp location message
+     * @param lng Longitude from the WhatsApp location message
+     * @return GeocodingResult with the same lat/lng and a formatted address, never null
+     */
+    public GeocodingResult reverseGeocode(double lat, double lng) {
+        log.info("[GoogleMaps] Reverse geocoding lat={}, lng={}", lat, lng);
+        if (apiKey == null || apiKey.isBlank() || apiKey.contains("YOUR_GOOGLE_MAPS")) {
+            log.debug("GoogleMapsService.reverseGeocode(): API key not configured — returning coordinate string");
+            return new GeocodingResult(lat, lng, String.format("%.5f, %.5f", lat, lng));
+        }
+        try {
+            String url = "https://maps.googleapis.com/maps/api/geocode/json" +
+                    "?latlng=" + lat + "," + lng +
+                    "&key=" + apiKey;
+            JsonNode root = get(url);
+            String status = root.path("status").asText();
+            if ("OK".equals(status)) {
+                JsonNode result = root.path("results").get(0);
+                String formatted = result.path("formatted_address").asText();
+                log.info("[GoogleMaps] Reverse geocode result: {}", formatted);
+                return new GeocodingResult(lat, lng, formatted);
+            } else {
+                log.warn("[GoogleMaps] Reverse geocode returned status={}", status);
+            }
+        } catch (Exception e) {
+            log.error("[GoogleMaps] Reverse geocoding error for lat={}, lng={}: {}", lat, lng, e.getMessage());
+        }
+        // Fallback: return raw coordinate string so booking can still proceed
+        return new GeocodingResult(lat, lng, String.format("%.5f, %.5f", lat, lng));
+    }
+
+
     public double haversineKm(double lat1, double lon1, double lat2, double lon2) {
         final int R = 6371; // Earth's radius in km
         double dLat = Math.toRadians(lat2 - lat1);

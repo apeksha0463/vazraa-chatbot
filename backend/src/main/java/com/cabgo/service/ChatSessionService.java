@@ -334,22 +334,38 @@ public class ChatSessionService {
         session.setRejectedDriverIds(new ArrayList<>());
 
         whatsAppService.sendText(session.getWhatsappPhone(),
-            "📍 Please share your pickup location.\n\n" +
-            "Type your area, landmark, or address.\n\n" +
-            "Example: Koramangala, Bangalore");
+            "📍 *Please share your pickup location.*\n\n" +
+            "You can either:\n" +
+            "• Type your address or landmark\n" +
+            "• Tap 📎 → *Location* → Send your current location\n\n" +
+            "_Example: Koramangala, Bangalore_");
     }
 
     private void handlePickup(ChatSession session, String messageType, String text,
                                Double lat, Double lng, String locationName) {
-        log.info("[ChatState] Processing pickup location input for user: {}", session.getWhatsappPhone());
+        log.info("[ChatState] Processing pickup location input for user: {}, messageType: {}, lat: {}, lng: {}",
+                session.getWhatsappPhone(), messageType, lat, lng);
+
         if ("location".equals(messageType) && isValidCoordinate(lat, lng)) {
-            String address = (locationName != null && !locationName.isBlank())
-                    ? locationName
-                    : String.format("%.5f, %.5f", lat, lng);
+            // Customer shared their WhatsApp location — reverse-geocode for a readable address
+            String address;
+            if (locationName != null && !locationName.isBlank()
+                    && !locationName.matches("-?\\d+\.\\d+,\s*-?\\d+\.\\d+")) {
+                // AiSensy already provided a name (saved place name from WhatsApp)
+                address = locationName;
+                log.info("[ChatState] Using WhatsApp location name as pickup address: {}", address);
+            } else {
+                // No name or only raw coordinates — call Google Maps Reverse Geocoding
+                log.info("[ChatState] No location name in payload — reverse geocoding lat={}, lng={}", lat, lng);
+                GoogleMapsService.GeocodingResult rev = mapsService.reverseGeocode(lat, lng);
+                address = rev.formattedAddress();
+                log.info("[ChatState] Reverse geocoded pickup address: {}", address);
+            }
             session.setTempPickupLat(lat);
             session.setTempPickupLng(lng);
             session.setTempPickupAddress(address);
-        } else if (!text.isBlank()) {
+
+        } else if (text != null && !text.isBlank()) {
             GoogleMapsService.GeocodingResult geo = parseLocationInput(text);
             if (geo != null) {
                 session.setTempPickupLat(geo.lat());
@@ -361,36 +377,58 @@ public class ChatSessionService {
                 session.setTempPickupLng(77.5946);
                 session.setTempPickupAddress(text);
             }
+
         } else if ("location".equals(messageType) && !isValidCoordinate(lat, lng)) {
             whatsAppService.sendText(session.getWhatsappPhone(),
-                "📍 Got your location pin, but could not read the coordinates.\n\nPlease try again: pin your location or type the address.");
+                "📍 Got your location pin, but could not read the coordinates.\n\nPlease try again by pinning your location or typing the address.");
             return;
+
         } else {
             whatsAppService.sendText(session.getWhatsappPhone(),
-                "Please share your pickup location. 📍");
+                "📍 *Please share your pickup location.*\n\n" +
+                "You can either:\n" +
+                "• Type your address or landmark\n" +
+                "• Tap 📎 → *Location* → Send your current location");
             return;
         }
 
-        log.info("[ChatState] Transitioning user {} to AWAITING_DROP. Pickup set: {}", session.getWhatsappPhone(), session.getTempPickupAddress());
+        log.info("[ChatState] Transitioning user {} to AWAITING_DROP. Pickup set: {}",
+                session.getWhatsappPhone(), session.getTempPickupAddress());
         session.setState(ConversationState.AWAITING_DROP);
         whatsAppService.sendText(session.getWhatsappPhone(),
-            "✅ Pickup confirmed: " + session.getTempPickupAddress() + "\n\n" +
-            "📍 Please enter your drop location.\n\n" +
-            "Type your area, landmark, or address.\n\n" +
-            "Example: Indiranagar, Bangalore");
+            "✅ *Pickup confirmed:* " + session.getTempPickupAddress() + "\n\n" +
+            "📍 *Now share your drop location.*\n\n" +
+            "You can either:\n" +
+            "• Type your destination address or landmark\n" +
+            "• Tap 📎 → *Location* → Send your destination\n\n" +
+            "_Example: Indiranagar, Bangalore_");
     }
 
     private void handleDrop(ChatSession session, String messageType, String text,
                              Double lat, Double lng, String locationName) {
-        log.info("[ChatState] Processing drop location input for user: {}", session.getWhatsappPhone());
+        log.info("[ChatState] Processing drop location input for user: {}, messageType: {}, lat: {}, lng: {}",
+                session.getWhatsappPhone(), messageType, lat, lng);
+
         if ("location".equals(messageType) && isValidCoordinate(lat, lng)) {
-            String address = (locationName != null && !locationName.isBlank())
-                    ? locationName
-                    : String.format("%.5f, %.5f", lat, lng);
+            // Customer shared their WhatsApp location — reverse-geocode for a readable address
+            String address;
+            if (locationName != null && !locationName.isBlank()
+                    && !locationName.matches("-?\\d+\.\\d+,\s*-?\\d+\.\\d+")) {
+                // AiSensy already provided a saved place name from WhatsApp
+                address = locationName;
+                log.info("[ChatState] Using WhatsApp location name as drop address: {}", address);
+            } else {
+                // No name — call Google Maps Reverse Geocoding
+                log.info("[ChatState] No location name in payload — reverse geocoding lat={}, lng={}", lat, lng);
+                GoogleMapsService.GeocodingResult rev = mapsService.reverseGeocode(lat, lng);
+                address = rev.formattedAddress();
+                log.info("[ChatState] Reverse geocoded drop address: {}", address);
+            }
             session.setTempDropLat(lat);
             session.setTempDropLng(lng);
             session.setTempDropAddress(address);
-        } else if (!text.isBlank()) {
+
+        } else if (text != null && !text.isBlank()) {
             GoogleMapsService.GeocodingResult geo = parseLocationInput(text);
             if (geo != null) {
                 session.setTempDropLat(geo.lat());
@@ -402,13 +440,18 @@ public class ChatSessionService {
                 session.setTempDropLng(77.6245);
                 session.setTempDropAddress(text);
             }
+
         } else if ("location".equals(messageType) && !isValidCoordinate(lat, lng)) {
             whatsAppService.sendText(session.getWhatsappPhone(),
-                "📍 Got your location pin, but could not read the coordinates.\n\nPlease try again: pin your location or type the address.");
+                "📍 Got your location pin, but could not read the coordinates.\n\nPlease try again by pinning your location or typing the address.");
             return;
+
         } else {
             whatsAppService.sendText(session.getWhatsappPhone(),
-                "Please share your drop location. 📍");
+                "📍 *Please share your drop location.*\n\n" +
+                "You can either:\n" +
+                "• Type your destination address or landmark\n" +
+                "• Tap 📎 → *Location* → Send your destination");
             return;
         }
 
