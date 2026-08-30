@@ -13,4 +13,5 @@ public interface ChatSessionRepository extends MongoRepository<ChatSession, Stri
     Optional<ChatSession> findByWhatsappPhone(String whatsappPhone);
     List<ChatSession> findByState(ConversationState state);
     long countByState(ConversationState state);
+    Optional<ChatSession> findByPendingCashfreeOrderId(String pendingCashfreeOrderId);
 }

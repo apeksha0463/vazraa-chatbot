@@ -47,6 +47,10 @@ public class Ride {
     
     private PaymentMethod paymentMethod; // CASH, WALLET, UPI, CARD
     private String paymentStatus; // PENDING, PAID, FAILED
+
+    // ── Cashfree payment reference ────────────────────────────────────────────
+    private String cashfreeOrderId;     // Cashfree order ID linked to this ride
+    private String cashfreePaymentLink; // Hosted payment URL sent to customer
     
     private String otp; // For ride start verification
     

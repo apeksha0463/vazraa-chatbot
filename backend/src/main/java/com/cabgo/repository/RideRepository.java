@@ -34,4 +34,6 @@ public interface RideRepository extends MongoRepository<Ride, String> {
     List<Ride> findByCustomerWhatsappPhone(String whatsappPhone);
 
     Optional<Ride> findFirstByCustomerWhatsappPhoneAndStatusInOrderByBookingTimeDesc(String whatsappPhone, List<RideStatus> statuses);
+
+    Optional<Ride> findByCashfreeOrderId(String cashfreeOrderId);
 }

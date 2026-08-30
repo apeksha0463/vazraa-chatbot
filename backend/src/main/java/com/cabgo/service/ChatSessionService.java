@@ -26,6 +26,7 @@ public class ChatSessionService {
     private final GoogleMapsService mapsService;
     private final GeminiService geminiService;
     private final FareService fareService;
+    private final CashfreeService cashfreeService;
     private final com.cabgo.repository.SOSAlertRepository sosAlertRepository;
     private final com.cabgo.repository.PopularDestinationRepository popularDestinationRepository;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
@@ -172,6 +173,7 @@ public class ChatSessionService {
             case AWAITING_DROP -> handleDrop(session, messageType, text, locationLat, locationLng, locationName);
             case AWAITING_VEHICLE_SELECTION -> handleVehicleSelection(session, text, replyId);
             case AWAITING_CONFIRMATION -> handleConfirmation(session, text, replyId);
+            case AWAITING_PAYMENT -> handleAwaitingPayment(session, text);
             case RIDE_ACTIVE -> handleRideActive(session, text, replyId);
             case AWAITING_CANCEL_CONFIRM -> handleCancelConfirm(session, text, replyId);
             case AWAITING_PAYMENT_METHOD -> handlePaymentMethod(session, text, replyId);
@@ -557,7 +559,7 @@ public class ChatSessionService {
     private void handleConfirmation(ChatSession session, String text, String replyId) {
         String input = replyId.isEmpty() ? text : replyId.toLowerCase();
         if (input.equals("1") || input.equals("confirm") || input.contains("yes")) {
-            createRideAndFindDriver(session);
+            initiatePaymentForRide(session);
         } else if (input.equals("2") || input.equals("cancel") || input.contains("no")) {
             session.setState(ConversationState.MAIN_MENU);
             whatsAppService.sendText(session.getWhatsappPhone(), "Booking cancelled. Type *menu* to start again.");
@@ -566,28 +568,37 @@ public class ChatSessionService {
         }
     }
 
-    private void createRideAndFindDriver(ChatSession session) {
-        // Look up or auto-register customer by phone
-        String phoneSuffix = normalizePhone(session.getWhatsappPhone());
+    /**
+     * Creates a ride (in PENDING_PAYMENT status), creates a Cashfree Sandbox order,
+     * sends the payment link to the customer via WhatsApp, and waits for payment.
+     */
+    private void initiatePaymentForRide(ChatSession session) {
+        String phone = session.getWhatsappPhone();
+        log.info("[Cashfree] Initiating payment for session phone={}", phone);
+
+        // Look up or auto-register customer
+        String phoneSuffix = normalizePhone(phone);
         Customer customer = customerRepository.findByPhone(phoneSuffix)
             .orElseGet(() -> {
                 Customer newCust = Customer.builder()
                     .name("WhatsApp User")
                     .phone(phoneSuffix)
-                    .email("wa_" + session.getWhatsappPhone() + "@vazraa.com")
+                    .email("wa_" + phone + "@vazraa.com")
                     .password("")
                     .status(CustomerStatus.ACTIVE)
                     .build();
                 return customerRepository.save(newCust);
             });
-
         session.setCustomerId(customer.getId());
         session.setCustomerName(customer.getName());
 
+        double fare = session.getTempFare() != null ? session.getTempFare() : 0.0;
+
+        // Create the ride in PENDING_PAYMENT state — no driver matching yet
         Ride ride = Ride.builder()
             .customerId(customer.getId())
             .customerName(customer.getName())
-            .customerWhatsappPhone(session.getWhatsappPhone())
+            .customerWhatsappPhone(phone)
             .pickupLocation(session.getTempPickupAddress())
             .pickupLatitude(session.getTempPickupLat())
             .pickupLongitude(session.getTempPickupLng())
@@ -597,29 +608,251 @@ public class ChatSessionService {
             .vehicleCategory(session.getTempVehicleCategory() != null
                     ? VehicleCategory.valueOf(session.getTempVehicleCategory())
                     : VehicleCategory.SEDAN)
-            .status(RideStatus.SEARCHING)
-            .estimatedFare(session.getTempFare())
-            .fare(session.getTempFare())
+            .status(RideStatus.PENDING_PAYMENT)
+            .estimatedFare(fare)
+            .fare(fare)
             .distance(session.getTempDistance())
             .duration(session.getTempDuration())
-            .paymentMethod(PaymentMethod.CASH)
+            .paymentMethod(PaymentMethod.UPI)
             .paymentStatus("PENDING")
             .otp(String.format("%04d", new Random().nextInt(10000)))
             .bookingTime(LocalDateTime.now())
             .requestedAt(LocalDateTime.now())
             .build();
-
         ride = rideRepository.save(ride);
-        session.setActiveRideId(ride.getId());
-        session.setState(ConversationState.RIDE_ACTIVE);
+
+        // Generate unique Cashfree order ID
+        String cashfreeOrderId = CashfreeService.generateOrderId(ride.getId());
+        ride.setCashfreeOrderId(cashfreeOrderId);
+        rideRepository.save(ride);
+
+        // Store pending state on session
+        session.setPendingRideId(ride.getId());
+        session.setPendingCashfreeOrderId(cashfreeOrderId);
+
+        // Create Cashfree Sandbox order
+        whatsAppService.sendText(phone, "⏳ Creating your payment link...");
+        CashfreeService.CashfreeOrderResult orderResult = cashfreeService.createOrder(
+                cashfreeOrderId,
+                fare,
+                phone,
+                customer.getName() != null ? customer.getName() : "Vazraa Customer",
+                customer.getEmail() != null ? customer.getEmail() : "noreply@vazraa.com"
+        );
+
+        if (!orderResult.isSuccess()) {
+            log.error("[Cashfree] Order creation failed: {}", orderResult.errorMessage());
+            // Fall back to cash booking if Cashfree fails
+            whatsAppService.sendText(phone,
+                "⚠️ Payment gateway is temporarily unavailable.\n\n" +
+                "Your booking has been confirmed as a *Cash payment* booking.\n\n" +
+                "💵 Please pay ₹" + String.format("%.0f", fare) + " to the driver in cash.");
+            ride.setPaymentMethod(PaymentMethod.CASH);
+            ride.setStatus(RideStatus.SEARCHING);
+            rideRepository.save(ride);
+            session.setActiveRideId(ride.getId());
+            session.setPendingRideId(null);
+            session.setPendingCashfreeOrderId(null);
+            session.setState(ConversationState.RIDE_ACTIVE);
+            chatSessionRepository.save(session);
+            findAndAssignNextDriver(session, ride);
+            return;
+        }
+
+        // Store payment link on ride
+        String paymentLink = orderResult.paymentLink();
+        ride.setCashfreePaymentLink(paymentLink);
+        rideRepository.save(ride);
+        session.setPendingPaymentLink(paymentLink);
+
+        session.setState(ConversationState.AWAITING_PAYMENT);
         chatSessionRepository.save(session);
 
-        whatsAppService.sendText(session.getWhatsappPhone(),
-            "✅ *Ride Confirmed!*\n\n🔍 Searching for nearby drivers...\n\nRide ID: #" + ride.getId().substring(ride.getId().length() - 6).toUpperCase() + "\nOTP: *" + ride.getOtp() + "*\n\nYou'll be notified when a driver accepts.");
-
-        // Trigger matching
-        findAndAssignNextDriver(session, ride);
+        String paymentMsg = String.format(
+            "💳 *Your ride fare is ₹%.0f.*\n\n" +
+            "Please complete the payment using the link below:\n\n" +
+            "%s\n\n" +
+            "Once payment is successful, your booking will be confirmed.\n\n" +
+            "📌 *Booking ID:* #%s\n\n" +
+            "_Type *status* to check payment status or *cancel* to cancel the booking._",
+            fare,
+            paymentLink,
+            ride.getId().substring(Math.max(0, ride.getId().length() - 6)).toUpperCase()
+        );
+        whatsAppService.sendText(phone, paymentMsg);
+        log.info("[Cashfree] Payment link sent to {} for orderId={}", phone, cashfreeOrderId);
     }
+
+    /**
+     * Handles customer messages while in AWAITING_PAYMENT state.
+     * Supports: "status" (verify payment), "cancel" (cancel booking), "retry" (resend link).
+     */
+    private void handleAwaitingPayment(ChatSession session, String text) {
+        String phone = session.getWhatsappPhone();
+        String input = text != null ? text.trim().toLowerCase() : "";
+
+        if (input.equals("cancel")) {
+            // Cancel the pending ride
+            if (session.getPendingRideId() != null) {
+                rideRepository.findById(session.getPendingRideId()).ifPresent(ride -> {
+                    ride.setStatus(RideStatus.CANCELLED);
+                    ride.setCancellationReason("Cancelled by customer during payment");
+                    ride.setCancelledBy("CUSTOMER");
+                    ride.setCancelledAt(LocalDateTime.now());
+                    rideRepository.save(ride);
+                });
+            }
+            session.setPendingRideId(null);
+            session.setPendingCashfreeOrderId(null);
+            session.setPendingPaymentLink(null);
+            session.setState(ConversationState.MAIN_MENU);
+            whatsAppService.sendText(phone, "❌ Booking cancelled. Type *menu* to start again.");
+
+        } else if (input.equals("status") || input.equals("check")) {
+            // Manually verify payment status with Cashfree
+            String orderId = session.getPendingCashfreeOrderId();
+            if (orderId == null) {
+                whatsAppService.sendText(phone, "No pending payment found. Type *menu* to restart.");
+                return;
+            }
+            whatsAppService.sendText(phone, "🔄 Checking your payment status...");
+            CashfreeService.PaymentVerificationResult result = cashfreeService.verifyPayment(orderId);
+            handleCashfreePaymentResult(orderId, result.isPaid() ? "SUCCESS" : (result.isFailed() ? "FAILED" : "PENDING"));
+
+        } else if (input.equals("retry") || input.equals("resend") || input.contains("link")) {
+            // Resend the payment link
+            String link = session.getPendingPaymentLink();
+            double fare = session.getTempFare() != null ? session.getTempFare() : 0.0;
+            if (link != null) {
+                whatsAppService.sendText(phone,
+                    String.format("💳 *Resending your payment link:*\n\n" +
+                    "Fare: ₹%.0f\n\n%s\n\n" +
+                    "_Type *status* to verify or *cancel* to cancel._", fare, link));
+            } else {
+                whatsAppService.sendText(phone, "Payment link not available. Type *cancel* to restart.");
+            }
+        } else {
+            // Default — remind them what to do
+            String link = session.getPendingPaymentLink();
+            double fare = session.getTempFare() != null ? session.getTempFare() : 0.0;
+            whatsAppService.sendText(phone,
+                String.format("⏳ *Payment Pending*\n\n" +
+                "Your fare is ₹%.0f. Please complete the payment:\n\n" +
+                "%s\n\n" +
+                "Commands:\n" +
+                "• *status* — check payment status\n" +
+                "• *retry* — resend payment link\n" +
+                "• *cancel* — cancel booking",
+                fare, link != null ? link : "[Link expired — type cancel to restart]"));
+        }
+        chatSessionRepository.save(session);
+    }
+
+    /**
+     * Called by CashfreeWebhookController when Cashfree sends a payment notification,
+     * or manually triggered when the customer types "status" during AWAITING_PAYMENT.
+     *
+     * @param cashfreeOrderId  The Cashfree order ID
+     * @param paymentStatus    "SUCCESS", "FAILED", or "PENDING"
+     */
+    public void handleCashfreePaymentResult(String cashfreeOrderId, String paymentStatus) {
+        log.info("[Cashfree] handleCashfreePaymentResult: orderId={}, status={}", cashfreeOrderId, paymentStatus);
+
+        Optional<ChatSession> sessionOpt = chatSessionRepository.findByPendingCashfreeOrderId(cashfreeOrderId);
+        if (sessionOpt.isEmpty()) {
+            log.warn("[Cashfree] No session found for orderId={}", cashfreeOrderId);
+            return;
+        }
+        ChatSession session = sessionOpt.get();
+        String phone = session.getWhatsappPhone();
+
+        switch (paymentStatus.toUpperCase()) {
+            case "SUCCESS" -> {
+                // Mark ride as payment received and start driver matching
+                String pendingRideId = session.getPendingRideId();
+                if (pendingRideId == null) {
+                    log.error("[Cashfree] SUCCESS but no pendingRideId on session for phone={}", phone);
+                    whatsAppService.sendText(phone, "✅ Payment received! However, we had trouble locating your booking. Please type *menu* and book again.");
+                    return;
+                }
+
+                Optional<Ride> rideOpt = rideRepository.findById(pendingRideId);
+                if (rideOpt.isEmpty()) {
+                    log.error("[Cashfree] Ride not found for pendingRideId={}", pendingRideId);
+                    whatsAppService.sendText(phone, "✅ Payment received! However, we had trouble locating your booking. Please contact support.");
+                    return;
+                }
+
+                Ride ride = rideOpt.get();
+                ride.setStatus(RideStatus.SEARCHING);
+                ride.setPaymentStatus("PAID");
+                rideRepository.save(ride);
+
+                // Clear payment pending state on session, set active ride
+                session.setActiveRideId(ride.getId());
+                session.setPendingRideId(null);
+                session.setPendingCashfreeOrderId(null);
+                session.setPendingPaymentLink(null);
+                session.setState(ConversationState.RIDE_ACTIVE);
+                chatSessionRepository.save(session);
+
+                whatsAppService.sendText(phone,
+                    "✅ *Payment Received!*\n\n" +
+                    "💰 ₹" + String.format("%.0f", ride.getFare()) + " paid successfully.\n\n" +
+                    "🔍 Searching for nearby drivers...\n\n" +
+                    "Ride ID: #" + ride.getId().substring(Math.max(0, ride.getId().length() - 6)).toUpperCase() + "\n" +
+                    "OTP: *" + ride.getOtp() + "*\n\n" +
+                    "You'll be notified when a driver accepts.");
+
+                findAndAssignNextDriver(session, ride);
+            }
+
+            case "FAILED" -> {
+                // Payment failed — allow retry
+                Optional<Ride> rideOpt = session.getPendingRideId() != null
+                        ? rideRepository.findById(session.getPendingRideId())
+                        : Optional.empty();
+
+                double fare = session.getTempFare() != null ? session.getTempFare() : 0.0;
+                String link = session.getPendingPaymentLink();
+
+                // Mark ride payment failed (but keep ride for retry)
+                rideOpt.ifPresent(ride -> {
+                    ride.setPaymentStatus("FAILED");
+                    rideRepository.save(ride);
+                });
+
+                // Keep session in AWAITING_PAYMENT so customer can retry
+                chatSessionRepository.save(session);
+
+                whatsAppService.sendText(phone,
+                    String.format("❌ *Payment Failed*\n\n" +
+                    "Your payment of ₹%.0f could not be processed.\n\n" +
+                    "Please try again:\n%s\n\n" +
+                    "Or type:\n" +
+                    "• *retry* — resend payment link\n" +
+                    "• *cancel* — cancel booking",
+                    fare, link != null ? link : "[Link expired — type cancel and rebook]"));
+            }
+
+            case "PENDING" -> {
+                chatSessionRepository.save(session);
+                whatsAppService.sendText(phone,
+                    "⏳ *Payment Processing*\n\n" +
+                    "Your payment is still being processed by the bank.\n\n" +
+                    "Please wait a few minutes. Type *status* to check again.");
+            }
+
+            default -> {
+                log.warn("[Cashfree] Unknown paymentStatus={} for orderId={}", paymentStatus, cashfreeOrderId);
+                chatSessionRepository.save(session);
+            }
+        }
+    }
+
+    // NOTE: createRideAndFindDriver is no longer called directly from handleConfirmation.
+    // Payment now goes through initiatePaymentForRide → handleCashfreePaymentResult → findAndAssignNextDriver.
+    // This method is kept for any legacy/cash fallback usage.
 
     private void findAndAssignNextDriver(ChatSession session, Ride ride) {
         Optional<Driver> nearestDriver = driverMatchingService.findNearestDriver(

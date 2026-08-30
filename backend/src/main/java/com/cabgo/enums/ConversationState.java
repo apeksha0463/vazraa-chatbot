@@ -10,6 +10,7 @@ public enum ConversationState {
     RIDE_ACTIVE,
     AWAITING_CANCEL_CONFIRM,
     AWAITING_PAYMENT_METHOD,
+    AWAITING_PAYMENT,       // Cashfree online payment — waiting for customer to pay
     AWAITING_RATING,
     SUPPORT,
     

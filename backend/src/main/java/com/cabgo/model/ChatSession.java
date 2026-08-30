@@ -67,6 +67,11 @@ public class ChatSession {
     // ── Active ride tracking ──────────────────────────────────────────────────
     private String activeRideId;
 
+    // ── Cashfree payment tracking ─────────────────────────────────────────────
+    private String pendingCashfreeOrderId;  // Cashfree order ID while awaiting payment
+    private String pendingRideId;           // Ride created but not yet confirmed (payment pending)
+    private String pendingPaymentLink;      // Cashfree payment link sent to customer
+
     @Builder.Default
     private List<String> rejectedDriverIds = new ArrayList<>();
 

@@ -27,6 +27,10 @@ services:
       AISENSY_MESSAGE_API_URL: "${AISENSY_MESSAGE_API_URL:-}"
       GOOGLE_MAPS_API_KEY: "${GOOGLE_MAPS_API_KEY:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      CASHFREE_APP_ID: "${CASHFREE_APP_ID:-}"
+      CASHFREE_SECRET_KEY: "${CASHFREE_SECRET_KEY:-}"
+      CASHFREE_BASE_URL: "${CASHFREE_BASE_URL:-https://sandbox.cashfree.com/pg}"
+      CASHFREE_ENV: "${CASHFREE_ENV:-TEST}"
     ports:
       - "3002:3002"
 

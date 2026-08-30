@@ -75,3 +75,10 @@ cab:
     per-minute: 1.0
   matching:
     radius-km: 10.0
+
+# ── Cashfree Payment Gateway (Sandbox) ────────────────────────────────────
+cashfree:
+  app-id:     ${CASHFREE_APP_ID:}
+  secret-key: ${CASHFREE_SECRET_KEY:}
+  base-url:   ${CASHFREE_BASE_URL:https://sandbox.cashfree.com/pg}
+  environment: ${CASHFREE_ENV:TEST}

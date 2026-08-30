@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/webhook/**").permitAll()
+                        .requestMatchers("/cashfree/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/tracking/**").permitAll()
                         .requestMatchers("/rides/*/track").permitAll()
