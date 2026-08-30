@@ -350,7 +350,7 @@ public class ChatSessionService {
             // Customer shared their WhatsApp location — reverse-geocode for a readable address
             String address;
             if (locationName != null && !locationName.isBlank()
-                    && !locationName.matches("-?\\d+\.\\d+,\s*-?\\d+\.\\d+")) {
+                    && !locationName.matches("-?\\d+\\.\\d+,\\s*-?\\d+\\.\\d+")) {
                 // AiSensy already provided a name (saved place name from WhatsApp)
                 address = locationName;
                 log.info("[ChatState] Using WhatsApp location name as pickup address: {}", address);
@@ -413,7 +413,7 @@ public class ChatSessionService {
             // Customer shared their WhatsApp location — reverse-geocode for a readable address
             String address;
             if (locationName != null && !locationName.isBlank()
-                    && !locationName.matches("-?\\d+\.\\d+,\s*-?\\d+\.\\d+")) {
+                    && !locationName.matches("-?\\d+\\.\\d+,\\s*-?\\d+\\.\\d+")) {
                 // AiSensy already provided a saved place name from WhatsApp
                 address = locationName;
                 log.info("[ChatState] Using WhatsApp location name as drop address: {}", address);
