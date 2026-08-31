@@ -117,6 +117,7 @@ public class WhatsAppService {
     public String sanitizeForAiSensy(String message) {
         if (message == null) return "";
         return message
+                .replaceAll("[\\r\\n]+", " ")
                 .replaceAll("[\\t]+", " ")
                 .replaceAll(" {2,}", " ")
                 .trim();
