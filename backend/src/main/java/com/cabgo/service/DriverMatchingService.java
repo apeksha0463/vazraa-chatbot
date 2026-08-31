@@ -39,7 +39,6 @@ public class DriverMatchingService {
             .filter(d -> d.getLatitude() != null && d.getLongitude() != null)
             .filter(d -> d.getAvailableForRide() == null || Boolean.TRUE.equals(d.getAvailableForRide()))
             .filter(d -> excludeDriverIds == null || !excludeDriverIds.contains(d.getId()))
-            .filter(d -> d.getUpdatedAt() != null && d.getUpdatedAt().isAfter(java.time.LocalDateTime.now().minusMinutes(2)))
             .map(d -> {
                 double dist = mapsService.haversineKm(pickupLat, pickupLng, d.getLatitude(), d.getLongitude());
                 return new DriverDistance(d, dist);

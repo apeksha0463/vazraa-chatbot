@@ -37,6 +37,12 @@ public class CashfreeService {
     @Value("${cashfree.environment:TEST}")
     private String environment;
 
+    @Value("${aisensy.whatsapp-number:919035999800}")
+    private String whatsappNumber;
+
+    @Value("${aisensy.webhook-url:https://messages.bgsinfotech.com/messages/whatsapp}")
+    private String webhookUrl;
+
     private static final String API_VERSION = "2023-08-01";
     private static final MediaType JSON_MEDIA = MediaType.get("application/json; charset=utf-8");
 
@@ -103,16 +109,18 @@ public class CashfreeService {
             customerDetails.put("customer_name", customerName != null ? customerName : "Vazraa Customer");
             customerDetails.put("customer_email", customerEmail != null ? customerEmail : "noreply@vazraa.com");
 
-            Map<String, Object> orderMeta = new HashMap<>();
-            orderMeta.put("return_url", "https://vazraamobility.com/payment/success?order_id={order_id}");
+            Map<String, Object> linkMeta = new HashMap<>();
+            // After payment, redirect user back to WhatsApp chat
+            linkMeta.put("return_url", "https://api.whatsapp.com/send?phone=" + whatsappNumber + "&text=status");
+            linkMeta.put("notify_url", webhookUrl);
 
             Map<String, Object> body = new HashMap<>();
             body.put("link_id", internalOrderId);
             body.put("link_amount", Math.round(amountInRupees * 100.0) / 100.0);
             body.put("link_currency", "INR");
-            body.put("link_purpose", "Vazraa ride booking payment");
+            body.put("link_purpose", "Vazraa Ride Booking");
             body.put("customer_details", customerDetails);
-            body.put("link_meta", orderMeta);
+            body.put("link_meta", linkMeta);
 
             String json = objectMapper.writeValueAsString(body);
             log.info("[Cashfree] Sending order creation request for orderId={}", internalOrderId);
