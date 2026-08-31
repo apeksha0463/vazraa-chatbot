@@ -107,18 +107,18 @@ public class CashfreeService {
             orderMeta.put("return_url", "https://vazraamobility.com/payment/success?order_id={order_id}");
 
             Map<String, Object> body = new HashMap<>();
-            body.put("order_id", internalOrderId);
-            body.put("order_amount", Math.round(amountInRupees * 100.0) / 100.0);
-            body.put("order_currency", "INR");
+            body.put("link_id", internalOrderId);
+            body.put("link_amount", Math.round(amountInRupees * 100.0) / 100.0);
+            body.put("link_currency", "INR");
+            body.put("link_purpose", "Vazraa ride booking payment");
             body.put("customer_details", customerDetails);
-            body.put("order_meta", orderMeta);
-            body.put("order_note", "Vazraa ride booking payment");
+            body.put("link_meta", orderMeta);
 
             String json = objectMapper.writeValueAsString(body);
             log.info("[Cashfree] Sending order creation request for orderId={}", internalOrderId);
 
             Request request = new Request.Builder()
-                    .url(baseUrl + "/orders")
+                    .url(baseUrl + "/links")
                     .addHeader("Content-Type", "application/json")
                     .addHeader("x-api-version", API_VERSION)
                     .addHeader("x-client-id", appId)
@@ -137,17 +137,11 @@ public class CashfreeService {
                 }
 
                 JsonNode node = objectMapper.readTree(responseBody);
-                String cfOrderId   = node.path("order_id").asText(internalOrderId);
-                String sessionId   = node.path("payment_session_id").asText("");
-                String paymentLink = node.path("order_link").asText("");
+                String cfOrderId   = node.path("link_id").asText(internalOrderId);
+                String sessionId   = node.path("cf_link_id").asText("");
+                String paymentLink = node.path("link_url").asText("");
 
-                // Build payment link from session ID if order_link is not returned
-                if (paymentLink == null || paymentLink.isBlank()) {
-                    // Cashfree Sandbox hosted checkout URL
-                    paymentLink = "https://sandbox.cashfree.com/checkout/#" + sessionId;
-                }
-
-                log.info("[Cashfree] Order created successfully: cfOrderId={}", cfOrderId);
+                log.info("[Cashfree] Link created successfully: cfOrderId={}, link={}", cfOrderId, paymentLink);
                 return new CashfreeOrderResult(cfOrderId, sessionId, paymentLink, "CREATED", null);
             }
 
@@ -169,7 +163,7 @@ public class CashfreeService {
             log.info("[Cashfree] Verifying payment for orderId={}", cashfreeOrderId);
 
             Request request = new Request.Builder()
-                    .url(baseUrl + "/orders/" + cashfreeOrderId)
+                    .url(baseUrl + "/links/" + cashfreeOrderId)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("x-api-version", API_VERSION)
                     .addHeader("x-client-id", appId)
@@ -188,25 +182,23 @@ public class CashfreeService {
                 }
 
                 JsonNode node = objectMapper.readTree(responseBody);
-                String orderStatus = node.path("order_status").asText("UNKNOWN");
-                double orderAmount = node.path("order_amount").asDouble(0.0);
+                String linkStatus = node.path("link_status").asText("UNKNOWN"); // e.g. ACTIVE, PAID
+                double orderAmount = node.path("link_amount").asDouble(0.0);
 
-                // Derive paymentStatus from order_status or payments array
                 String paymentStatus = "NOT_ATTEMPTED";
-                JsonNode payments = node.path("payments");
-                if (payments.isArray() && !payments.isEmpty()) {
-                    paymentStatus = payments.get(0).path("payment_status").asText("NOT_ATTEMPTED");
-                } else if ("PAID".equalsIgnoreCase(orderStatus)) {
+                if ("PAID".equalsIgnoreCase(linkStatus)) {
                     paymentStatus = "SUCCESS";
-                } else if ("ACTIVE".equalsIgnoreCase(orderStatus)) {
+                } else if ("ACTIVE".equalsIgnoreCase(linkStatus) || "PARTIALLY_PAID".equalsIgnoreCase(linkStatus)) {
                     paymentStatus = "PENDING";
+                } else if ("EXPIRED".equalsIgnoreCase(linkStatus) || "TERMINATED".equalsIgnoreCase(linkStatus)) {
+                    paymentStatus = "FAILED";
                 }
 
-                log.info("[Cashfree] Verification result: orderId={}, orderStatus={}, paymentStatus={}",
-                        cashfreeOrderId, orderStatus, paymentStatus);
+                log.info("[Cashfree] Verification result: linkId={}, linkStatus={}, paymentStatus={}",
+                        cashfreeOrderId, linkStatus, paymentStatus);
 
                 return new PaymentVerificationResult(
-                        cashfreeOrderId, orderStatus, paymentStatus, orderAmount, null);
+                        cashfreeOrderId, linkStatus, paymentStatus, orderAmount, null);
             }
 
         } catch (Exception e) {

@@ -64,17 +64,26 @@ public class CashfreeWebhookController {
             String eventType = root.path("type").asText("");
             JsonNode data = root.path("data");
             JsonNode order = data.path("order");
+            JsonNode link = data.path("link");
             JsonNode payment = data.path("payment");
 
             String orderId = order.path("order_id").asText("");
+            if (orderId.isBlank()) {
+                orderId = link.path("link_id").asText(""); // For Payment Links webhook
+            }
+            
             String orderStatus = order.path("order_status").asText("");
+            if (orderStatus.isBlank()) {
+                orderStatus = link.path("link_status").asText("");
+            }
+            
             String paymentStatus = payment.path("payment_status").asText(eventType);
 
             log.info("[Cashfree Webhook] type={}, orderId={}, orderStatus={}, paymentStatus={}",
                     eventType, orderId, orderStatus, paymentStatus);
 
             if (orderId.isBlank()) {
-                log.warn("[Cashfree Webhook] No order_id in payload — ignoring.");
+                log.warn("[Cashfree Webhook] No order_id or link_id in payload — ignoring.");
                 return ResponseEntity.ok("ignored");
             }
 
