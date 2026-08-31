@@ -116,8 +116,8 @@ public class WhatsAppService {
      */
     public String sanitizeForAiSensy(String message) {
         if (message == null) return "";
+        // Meta/AiSensy now generally supports newlines in parameters, so we preserve them
         return message
-                .replaceAll("[\\r\\n]+", " ")
                 .replaceAll("[\\t]+", " ")
                 .replaceAll(" {2,}", " ")
                 .trim();
