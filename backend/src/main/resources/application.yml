@@ -1,4 +1,4 @@
-server:
+﻿server:
   port: 3002
 
 spring:
@@ -50,24 +50,26 @@ management:
     health:
       show-details: always
 
-# ── WhatsApp API (AiSensy via bgsinfotech reseller) ───────────────────────────
+# -- WhatsApp API (AiSensy) ---------------------------------------------------
 aisensy:
   api-key:          ${AISENSY_API_KEY:b712de2d74a1e7a3692c0}
   project-api-key:  ${AISENSY_PROJECT_API_KEY:${AISENSY_API_KEY:b712de2d74a1e7a3692c0}}
+  project-id:       ${AISENSY_PROJECT_ID:}
+  project-api-url:  ${AISENSY_PROJECT_API_URL:https://apis.aisensy.com/project-apis/v1/project}
   campaign-name:    ${AISENSY_CAMPAIGN_NAME:Vazra mobility}
   user-name:        ${AISENSY_USER_NAME:Vazra mobility}
   whatsapp-number:  ${AISENSY_WHATSAPP_NUMBER:919035999800}
   webhook-url:      ${AISENSY_WEBHOOK_URL:https://messages.bgsinfotech.com/webhook/whatsapp}
   message-api-url:  ${AISENSY_MESSAGE_API_URL:https://backend.aisensy.com/campaign/t1/api/v2}
 
-# ── Google Maps API ────────────────────────────────────────────────────────────
+# -- Google Maps / Gemini API -------------------------------------------------
 google:
   maps:
     api-key: ${GOOGLE_MAPS_API_KEY:YOUR_GOOGLE_MAPS_API_KEY}
   gemini:
     api-key: ${GEMINI_API_KEY:YOUR_GEMINI_API_KEY}
 
-# ── Cab Fare & Matching Config ─────────────────────────────────────────────────
+# -- Cab Fare & Matching Config ------------------------------------------------
 cab:
   fare:
     base: 50.0
@@ -76,9 +78,9 @@ cab:
   matching:
     radius-km: 10.0
 
-# ── Cashfree Payment Gateway (Sandbox) ────────────────────────────────────
+# -- Cashfree Payment Gateway (Sandbox) ---------------------------------------
 cashfree:
-  app-id:     ${CASHFREE_APP_ID:}
-  secret-key: ${CASHFREE_SECRET_KEY:}
-  base-url:   ${CASHFREE_BASE_URL:https://sandbox.cashfree.com/pg}
+  app-id:      ${CASHFREE_APP_ID:}
+  secret-key:  ${CASHFREE_SECRET_KEY:}
+  base-url:    ${CASHFREE_BASE_URL:https://sandbox.cashfree.com/pg}
   environment: ${CASHFREE_ENV:TEST}
