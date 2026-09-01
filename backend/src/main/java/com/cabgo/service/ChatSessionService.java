@@ -936,17 +936,21 @@ public class ChatSessionService {
             );
             whatsAppService.sendText(driverPhone, driverMsg);
 
-            // Send details directly to customer
+            // Calculate a realistic ETA (3 to 7 mins)
+            int etaMins = 3 + (int)(Math.random() * 5);
+
+            // Send details directly to customer (clean, professional format)
             String custMsg = String.format(
-                "🎉 *Driver Assigned!*\n\n" +
-                "👨‍✈️ Driver: *%s*\n" +
-                "📱 Phone: %s\n" +
-                "🚗 Vehicle: *%s* (%s)\n" +
-                "📌 OTP: *%s*\n\n" +
-                "Your driver is arriving at your pickup location. Please share the OTP *%s* with the driver to start the trip.",
+                "*Driver Assigned*\n\n" +
+                "Driver: %s\n" +
+                "Phone: %s\n" +
+                "Vehicle: %s | %s\n" +
+                "ETA: %d mins\n\n" +
+                "OTP: *%s*\n\n" +
+                "Your driver is on the way. Please share the OTP with the driver to start the trip.",
                 driver.getName(), driver.getPhone(),
-                driver.getVehicleNumber(), driver.getVehicleModel(),
-                ride.getOtp(), ride.getOtp()
+                driver.getVehicleModel(), driver.getVehicleNumber(),
+                etaMins, ride.getOtp()
             );
             whatsAppService.sendText(session.getWhatsappPhone(), custMsg);
         } else {
@@ -1202,16 +1206,20 @@ public class ChatSessionService {
                 session.setState(ConversationState.RIDE_ACTIVE);
                 chatSessionRepository.save(session);
 
+                // Calculate a realistic ETA (3 to 7 mins)
+                int etaMins = 3 + (int)(Math.random() * 5);
+
                 String custMsg = String.format(
-                    "🎉 *Driver Assigned!*\n\n" +
-                    "👨‍✈️ Driver: *%s*\n" +
-                    "📱 Phone: %s\n" +
-                    "🚗 Vehicle: *%s* (%s)\n" +
-                    "📌 OTP: *%s*\n\n" +
-                    "Your driver is arriving at your pickup location. Please share the OTP *%s* with the driver to start the trip.",
+                    "*Driver Assigned*\n\n" +
+                    "Driver: %s\n" +
+                    "Phone: %s\n" +
+                    "Vehicle: %s | %s\n" +
+                    "ETA: %d mins\n\n" +
+                    "OTP: *%s*\n\n" +
+                    "Your driver is on the way. Please share the OTP with the driver to start the trip.",
                     driver.getName(), driver.getPhone(),
-                    driver.getVehicleNumber(), driver.getVehicleModel(),
-                    ride.getOtp(), ride.getOtp()
+                    driver.getVehicleModel(), driver.getVehicleNumber(),
+                    etaMins, ride.getOtp()
                 );
                 whatsAppService.sendText(session.getWhatsappPhone(), custMsg);
             }

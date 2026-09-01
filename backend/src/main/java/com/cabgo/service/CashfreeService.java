@@ -110,8 +110,8 @@ public class CashfreeService {
             customerDetails.put("customer_email", customerEmail != null ? customerEmail : "noreply@vazraa.com");
 
             Map<String, Object> linkMeta = new HashMap<>();
-            // After payment, redirect user back to WhatsApp chat
-            linkMeta.put("return_url", "https://api.whatsapp.com/send?phone=" + whatsappNumber + "&text=status");
+            // After payment, redirect user back to WhatsApp chat (without prefilling any text, since webhook automates the next step)
+            linkMeta.put("return_url", "https://api.whatsapp.com/send?phone=" + whatsappNumber);
             linkMeta.put("notify_url", webhookUrl);
 
             Map<String, Object> body = new HashMap<>();
