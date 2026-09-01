@@ -83,12 +83,11 @@ public class WhatsAppWebhookService {
                     }
                     case "LOCATION" -> {
                         type = "location";
-                        locationLat = messageContent.path("latitude").asDouble();
-                        locationLng = messageContent.path("longitude").asDouble();
-                        locationName = messageContent.path("name").asText("");
-                        if (locationName.isEmpty()) {
-                            locationName = messageContent.path("address").asText("");
-                        }
+                        JsonNode locNode = messageContent.has("location") ? messageContent.path("location") : messageContent;
+                        locationLat = locNode.path("latitude").asDouble(0.0);
+                        locationLng = locNode.path("longitude").asDouble(0.0);
+                        locationName = locNode.path("name").asText("");
+                        if (locationName.isEmpty()) locationName = locNode.path("address").asText("");
                         log.info("[Webhook Extractor] Extracted location: lat={}, lng={}, name={}", locationLat, locationLng, locationName);
                     }
                     case "IMAGE" -> {
@@ -153,19 +152,30 @@ public class WhatsAppWebhookService {
                         if (textBody.isEmpty()) textBody = data.path("message_content").path("text").asText("");
                         log.info("[Webhook Extractor] Extracted text: {}", textBody);
                     } else if ("location".equals(type)) {
-                        // Try message_content first, then fall back to msgNode directly
-                        locationLat = messageContent.path("latitude").asDouble();
-                        locationLng = messageContent.path("longitude").asDouble();
-                        // If lat/lng are zero (not found in message_content), try msgNode directly
-                        if (locationLat == 0.0 && locationLng == 0.0) {
-                            locationLat = msgNode.path("latitude").asDouble();
-                            locationLng = msgNode.path("longitude").asDouble();
+                        // Exhaustive search for the location node in AiSensy topic format
+                        JsonNode locNode = null;
+                        if (msgNode.has("location")) locNode = msgNode.path("location");
+                        else if (messageContent.has("location")) locNode = messageContent.path("location");
+                        else if (data.has("location")) locNode = data.path("location");
+                        
+                        if (locNode != null && !locNode.isMissingNode()) {
+                            locationLat = locNode.path("latitude").asDouble();
+                            locationLng = locNode.path("longitude").asDouble();
+                            locationName = locNode.path("name").asText("");
+                            if (locationName.isEmpty()) locationName = locNode.path("address").asText("");
+                        } else {
+                            // Fallback to flat fields
+                            locationLat = messageContent.path("latitude").asDouble(0.0);
+                            locationLng = messageContent.path("longitude").asDouble(0.0);
+                            if (locationLat == 0.0 && locationLng == 0.0) {
+                                locationLat = msgNode.path("latitude").asDouble(0.0);
+                                locationLng = msgNode.path("longitude").asDouble(0.0);
+                            }
+                            locationName = messageContent.path("name").asText("");
+                            if (locationName.isEmpty()) locationName = messageContent.path("address").asText("");
+                            if (locationName.isEmpty()) locationName = msgNode.path("name").asText("");
+                            if (locationName.isEmpty()) locationName = msgNode.path("address").asText("");
                         }
-                        // Try 'name' first, fallback to 'address'
-                        locationName = messageContent.path("name").asText("");
-                        if (locationName.isEmpty()) locationName = messageContent.path("address").asText("");
-                        if (locationName.isEmpty()) locationName = msgNode.path("name").asText("");
-                        if (locationName.isEmpty()) locationName = msgNode.path("address").asText("");
                         log.info("[Webhook Extractor] Topic format location: lat={}, lng={}, name={}", locationLat, locationLng, locationName);
                     } else if ("button_reply".equals(type) || "quick_reply".equals(type)) {
                         type = "text";
