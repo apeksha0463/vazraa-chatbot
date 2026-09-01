@@ -908,25 +908,47 @@ public class ChatSessionService {
             if (driverPhone != null && driverPhone.startsWith("0")) driverPhone = "91" + driverPhone.substring(1);
             else if (driverPhone != null && !driverPhone.startsWith("91")) driverPhone = "91" + driverPhone;
 
-            // Update ride with driver info temporarily (pending acceptance)
+            // Auto-assign the ride
             ride.setDriverId(driver.getId());
             ride.setDriverName(driver.getName());
             ride.setDriverPhone(driverPhone);
             ride.setDriverVehicleNumber(driver.getVehicleNumber());
+            ride.setStatus(RideStatus.ACCEPTED);
+            ride.setAcceptedAt(LocalDateTime.now());
             rideRepository.save(ride);
+
+            // Update driver status
+            driver.setAvailableForRide(false);
+            driver.setStatus(DriverStatus.BUSY);
+            driverRepository.save(driver);
 
             // Notify driver via WhatsApp
             String driverMsg = String.format(
-                "🚖 *New Ride Request!*\n\n" +
+                "🚖 *New Ride Assigned!*\n\n" +
                 "📍 Pickup: %s\n" +
                 "🎯 Drop: %s\n" +
                 "💰 Fare: ₹%.0f\n" +
                 "📏 Distance: %.1f km\n\n" +
-                "Reply:\n1️⃣ Accept\n2️⃣ Reject",
+                "📌 OTP: *%s*\n\n" +
+                "Please head to the pickup location. When customer boards and provides the OTP, type *start* to begin the trip.",
                 session.getTempPickupAddress(), session.getTempDropAddress(),
-                session.getTempFare(), session.getTempDistance()
+                session.getTempFare(), session.getTempDistance(), ride.getOtp()
             );
             whatsAppService.sendText(driverPhone, driverMsg);
+
+            // Send details directly to customer
+            String custMsg = String.format(
+                "🎉 *Driver Assigned!*\n\n" +
+                "👨‍✈️ Driver: *%s*\n" +
+                "📱 Phone: %s\n" +
+                "🚗 Vehicle: *%s* (%s)\n" +
+                "📌 OTP: *%s*\n\n" +
+                "Your driver is arriving at your pickup location. Please share the OTP *%s* with the driver to start the trip.",
+                driver.getName(), driver.getPhone(),
+                driver.getVehicleNumber(), driver.getVehicleModel(),
+                ride.getOtp(), ride.getOtp()
+            );
+            whatsAppService.sendText(session.getWhatsappPhone(), custMsg);
         } else {
             // No driver found
             ride.setStatus(RideStatus.CANCELLED);

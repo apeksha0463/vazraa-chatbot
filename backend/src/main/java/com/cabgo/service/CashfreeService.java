@@ -40,7 +40,7 @@ public class CashfreeService {
     @Value("${aisensy.whatsapp-number:919035999800}")
     private String whatsappNumber;
 
-    @Value("${aisensy.webhook-url:https://messages.bgsinfotech.com/messages/whatsapp}")
+    @Value("${cashfree.webhook-url:https://messages.bgsinfotech.com/cashfree/webhook}")
     private String webhookUrl;
 
     private static final String API_VERSION = "2023-08-01";
