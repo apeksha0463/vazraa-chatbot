@@ -1,4 +1,4 @@
-﻿server:
+server:
   port: 3002
 
 spring:
@@ -52,8 +52,8 @@ management:
 
 # -- WhatsApp API (AiSensy) ---------------------------------------------------
 aisensy:
-  api-key:          ${AISENSY_API_KEY:b712de2d74a1e7a3692c0}
-  project-api-key:  ${AISENSY_PROJECT_API_KEY:${AISENSY_API_KEY:b712de2d74a1e7a3692c0}}
+  api-key:          ${AISENSY_API_KEY:}          # Campaign API JWT — used in Campaign API body
+  project-api-key:  ${AISENSY_PROJECT_API_PWD:}  # Project API Password — used in X-AiSensy-Project-API-Pwd header
   project-id:       ${AISENSY_PROJECT_ID:}
   project-api-url:  ${AISENSY_PROJECT_API_URL:https://apis.aisensy.com/project-apis/v1/project}
   campaign-name:    ${AISENSY_CAMPAIGN_NAME:Vazra mobility}

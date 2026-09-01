@@ -39,12 +39,17 @@ public class WhatsAppService {
     @Value("${aisensy.project-id:}")
     private String projectId;
 
+    /** Project API Password — sent in X-AiSensy-Project-API-Pwd header for the Live Chat API. */
     @Value("${aisensy.project-api-key}")
     private String projectApiKey;
 
     // ── Campaign API config (template fallback) ────────────────────────────────
     @Value("${aisensy.message-api-url}")
     private String campaignApiUrl;
+
+    /** Campaign JWT — used as the apiKey field in the Campaign API request body. */
+    @Value("${aisensy.api-key}")
+    private String campaignApiKey;
 
     @Value("${aisensy.campaign-name}")
     private String campaignName;
@@ -207,7 +212,7 @@ public class WhatsAppService {
      */
     private Map<String, Object> buildCampaignPayload(String destination, String messageBody) {
         Map<String, Object> payload = new HashMap<>();
-        payload.put("apiKey",         projectApiKey);
+        payload.put("apiKey",         campaignApiKey);
         payload.put("campaignName",   campaignName);
         payload.put("destination",    destination);
         payload.put("userName",       userName);
