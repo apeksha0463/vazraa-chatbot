@@ -153,9 +153,20 @@ public class WhatsAppWebhookService {
                         if (textBody.isEmpty()) textBody = data.path("message_content").path("text").asText("");
                         log.info("[Webhook Extractor] Extracted text: {}", textBody);
                     } else if ("location".equals(type)) {
+                        // Try message_content first, then fall back to msgNode directly
                         locationLat = messageContent.path("latitude").asDouble();
                         locationLng = messageContent.path("longitude").asDouble();
+                        // If lat/lng are zero (not found in message_content), try msgNode directly
+                        if (locationLat == 0.0 && locationLng == 0.0) {
+                            locationLat = msgNode.path("latitude").asDouble();
+                            locationLng = msgNode.path("longitude").asDouble();
+                        }
+                        // Try 'name' first, fallback to 'address'
                         locationName = messageContent.path("name").asText("");
+                        if (locationName.isEmpty()) locationName = messageContent.path("address").asText("");
+                        if (locationName.isEmpty()) locationName = msgNode.path("name").asText("");
+                        if (locationName.isEmpty()) locationName = msgNode.path("address").asText("");
+                        log.info("[Webhook Extractor] Topic format location: lat={}, lng={}, name={}", locationLat, locationLng, locationName);
                     } else if ("button_reply".equals(type) || "quick_reply".equals(type)) {
                         type = "text";
                         textBody = messageContent.path("button_payload").asText("");

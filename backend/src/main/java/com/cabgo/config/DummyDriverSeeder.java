@@ -28,7 +28,15 @@ public class DummyDriverSeeder implements CommandLineRunner {
     public void run(String... args) {
         long count = driverRepository.count();
         if (count > 0) {
-            log.info("[DummyDriverSeeder] {} drivers already exist — skipping seed.", count);
+            // Drivers already exist — reset them all back to ONLINE + available
+            // so that dummy drivers don't get permanently stuck as BUSY after a completed ride.
+            List<Driver> all = driverRepository.findAll();
+            all.forEach(d -> {
+                d.setStatus(DriverStatus.ONLINE);
+                d.setAvailableForRide(true);
+            });
+            driverRepository.saveAll(all);
+            log.info("[DummyDriverSeeder] {} drivers reset to ONLINE + available.", all.size());
             return;
         }
 
