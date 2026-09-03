@@ -67,29 +67,50 @@ public class CashfreeWebhookController {
             JsonNode link = data.path("link");
             JsonNode payment = data.path("payment");
 
-            String orderId = order.path("order_id").asText("");
-            if (orderId.isBlank()) {
-                orderId = link.path("link_id").asText(""); // For Payment Links webhook
-            }
-            
-            String orderStatus = order.path("order_status").asText("");
-            if (orderStatus.isBlank()) {
-                orderStatus = link.path("link_status").asText("");
-            }
-            
-            String paymentStatus = payment.path("payment_status").asText(eventType);
+            // Exhaustive extraction for both Orders API and Payment Links API
+            String orderId = "";
+            if (data.has("link_id")) orderId = data.path("link_id").asText("");
+            if (orderId.isBlank() && order.has("order_id")) orderId = order.path("order_id").asText("");
+            if (orderId.isBlank() && link.has("link_id")) orderId = link.path("link_id").asText("");
+            if (orderId.isBlank() && data.has("order_id")) orderId = data.path("order_id").asText("");
+            if (orderId.isBlank()) orderId = root.path("order_id").asText("");
+
+            String orderStatus = "";
+            if (data.has("link_status")) orderStatus = data.path("link_status").asText("");
+            if (orderStatus.isBlank() && order.has("order_status")) orderStatus = order.path("order_status").asText("");
+            if (orderStatus.isBlank() && link.has("link_status")) orderStatus = link.path("link_status").asText("");
+            if (orderStatus.isBlank() && data.has("order_status")) orderStatus = data.path("order_status").asText("");
+
+            String paymentStatus = payment.path("payment_status").asText(data.path("payment_status").asText(eventType));
 
             log.info("[Cashfree Webhook] type={}, orderId={}, orderStatus={}, paymentStatus={}",
                     eventType, orderId, orderStatus, paymentStatus);
 
             if (orderId.isBlank()) {
-                log.warn("[Cashfree Webhook] No order_id or link_id in payload — ignoring.");
+                log.warn("[Cashfree Webhook] No order_id or link_id in payload: {} — ignoring.", rawBody);
                 return ResponseEntity.ok("ignored");
             }
 
             // ── 3. Dispatch to ChatSessionService based on payment outcome ──────
-            if ("PAYMENT_SUCCESS".equalsIgnoreCase(eventType) || "PAID".equalsIgnoreCase(orderStatus)
-                    || "SUCCESS".equalsIgnoreCase(paymentStatus)) {
+            boolean isSuccess = "PAYMENT_SUCCESS".equalsIgnoreCase(eventType)
+                    || "PAID".equalsIgnoreCase(orderStatus)
+                    || "SUCCESS".equalsIgnoreCase(paymentStatus)
+                    || eventType.contains("SUCCESS")
+                    || eventType.contains("PAID");
+
+            if (!isSuccess && !"FAILED".equalsIgnoreCase(paymentStatus) && !"CANCELLED".equalsIgnoreCase(paymentStatus)) {
+                // If ambiguous, perform a live verification with Cashfree API
+                try {
+                    CashfreeService.PaymentVerificationResult verify = cashfreeService.verifyPayment(orderId);
+                    if (verify.isPaid()) {
+                        isSuccess = true;
+                    }
+                } catch (Exception ex) {
+                    log.warn("[Cashfree Webhook] Live verification check failed: {}", ex.getMessage());
+                }
+            }
+
+            if (isSuccess) {
                 log.info("[Cashfree Webhook] Payment SUCCESS for orderId={}", orderId);
                 chatSessionService.handleCashfreePaymentResult(orderId, "SUCCESS");
 
