@@ -333,11 +333,9 @@ public class ChatSessionService {
         session.setTempDuration(null);
         session.setRejectedDriverIds(new ArrayList<>());
 
-        whatsAppService.sendText(session.getWhatsappPhone(),
+        whatsAppService.sendLocationRequest(session.getWhatsappPhone(),
             "📍 *Please share your pickup location.*\n\n" +
-            "You can either:\n" +
-            "• Type your address or landmark\n" +
-            "• Tap 📎 → *Location* → Send your current location\n\n" +
+            "Tap the button below to share your live location, or type your address/landmark.\n\n" +
             "_Example: Koramangala, Bangalore_");
     }
 
@@ -384,23 +382,19 @@ public class ChatSessionService {
             return;
 
         } else {
-            whatsAppService.sendText(session.getWhatsappPhone(),
+            whatsAppService.sendLocationRequest(session.getWhatsappPhone(),
                 "📍 *Please share your pickup location.*\n\n" +
-                "You can either:\n" +
-                "• Type your address or landmark\n" +
-                "• Tap 📎 → *Location* → Send your current location");
+                "Tap the button below to share your live location, or type your address.");
             return;
         }
 
         log.info("[ChatState] Transitioning user {} to AWAITING_DROP. Pickup set: {}",
                 session.getWhatsappPhone(), session.getTempPickupAddress());
         session.setState(ConversationState.AWAITING_DROP);
-        whatsAppService.sendText(session.getWhatsappPhone(),
+        whatsAppService.sendLocationRequest(session.getWhatsappPhone(),
             "✅ *Pickup confirmed:* " + session.getTempPickupAddress() + "\n\n" +
             "📍 *Now share your drop location.*\n\n" +
-            "You can either:\n" +
-            "• Type your destination address or landmark\n" +
-            "• Tap 📎 → *Location* → Send your destination\n\n" +
+            "Tap the button below to share your destination, or type the address.\n\n" +
             "_Example: Indiranagar, Bangalore_");
     }
 
@@ -447,11 +441,9 @@ public class ChatSessionService {
             return;
 
         } else {
-            whatsAppService.sendText(session.getWhatsappPhone(),
+            whatsAppService.sendLocationRequest(session.getWhatsappPhone(),
                 "📍 *Please share your drop location.*\n\n" +
-                "You can either:\n" +
-                "• Type your destination address or landmark\n" +
-                "• Tap 📎 → *Location* → Send your destination");
+                "Tap the button below to share your destination, or type the address.");
             return;
         }
 
@@ -1547,9 +1539,9 @@ public class ChatSessionService {
     // =================== FARE ESTIMATION FLOW ===================
     private void startFareEstimation(ChatSession session) {
         session.setState(ConversationState.FARE_EST_PICKUP);
-        whatsAppService.sendText(session.getWhatsappPhone(),
+        whatsAppService.sendLocationRequest(session.getWhatsappPhone(),
             "💰 *Get Fare Estimate*\n\n" +
-            "Please share/type your *Pickup Location*:");
+            "Please share your *Pickup Location* using the button below, or type your address:");
     }
 
     private void handleFareEstPickup(ChatSession session, String messageType, String text, Double lat, Double lng, String locationName) {
@@ -1581,9 +1573,9 @@ public class ChatSessionService {
         }
 
         session.setState(ConversationState.FARE_EST_DROP);
-        whatsAppService.sendText(session.getWhatsappPhone(),
-            "📍 *Pickup Address:* " + session.getTempPickupAddress() + "\n\n" +
-            "🎯 Now share/type your *Drop Location*:");
+        whatsAppService.sendLocationRequest(session.getWhatsappPhone(),
+            "📍 *Pickup:* " + session.getTempPickupAddress() + "\n\n" +
+            "🎯 Now share your *Drop Location* using the button below, or type your destination:");
     }
 
     private void handleFareEstDrop(ChatSession session, String messageType, String text, Double lat, Double lng, String locationName) {
