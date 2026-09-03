@@ -157,6 +157,7 @@ public class WhatsAppService {
             interactive.put("action", interactiveAction);
 
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("messaging_product", "whatsapp");
             payload.put("to",             destination);
             payload.put("type",           "interactive");
             payload.put("recipient_type", "individual");
