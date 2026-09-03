@@ -103,11 +103,94 @@ public class WhatsAppService {
     }
 
     /**
-     * Ask the user to share their location — plain text prompt since AiSensy
-     * location_request_message is a Meta-specific interactive type.
+     * Ask the user to share their location using Meta's native interactive
+     * location_request_message type, which renders a "Send Location" button
+     * in WhatsApp instead of a plain text instruction.
+     *
+     * Sends the interactive payload via the AiSensy Project (Live-Chat) API.
+     * Falls back to a plain-text prompt if:
+     *   - The Project API is not configured (project-id blank), OR
+     *   - The call fails (e.g. user outside the 24-hour session window).
      */
-    public void sendLocationRequest(String toPhone, String text) {
-        sendText(toPhone, text + "\n\n📌 Please share your location using the WhatsApp attachment button.");
+    public void sendLocationRequest(String toPhone, String bodyText) {
+        String dest = normalizeDestination(toPhone);
+        boolean sent = trySendInteractiveLocationRequest(dest, bodyText);
+        if (!sent) {
+            log.warn("[WhatsApp] Interactive location_request_message failed — falling back to plain text for {}", dest);
+            sendText(toPhone, bodyText + "\n\n📌 Please share your location by tapping 📎 → *Location* in WhatsApp.");
+        } else {
+            broadcastOutgoing(toPhone, "[Location Request] " + bodyText);
+        }
+    }
+
+    /**
+     * Sends an interactive location_request_message via the AiSensy Project API.
+     *
+     * Request format (Meta WhatsApp Cloud API - interactive):
+     * {
+     *   "to": "91XXXXXXXXXX",
+     *   "type": "interactive",
+     *   "recipient_type": "individual",
+     *   "interactive": {
+     *     "type": "location_request_message",
+     *     "body": { "text": "<prompt text>" },
+     *     "action": { "name": "send_location" }
+     *   }
+     * }
+     *
+     * @return true if the interactive message was dispatched successfully.
+     */
+    private boolean trySendInteractiveLocationRequest(String destination, String bodyText) {
+        if (projectId == null || projectId.isBlank()) {
+            log.warn("[WhatsApp LocationRequest] aisensy.project-id is not configured — cannot send interactive message.");
+            return false;
+        }
+
+        try {
+            String url = projectApiBaseUrl + "/" + projectId + "/messages";
+
+            Map<String, Object> interactiveBody = Map.of("text", bodyText);
+            Map<String, Object> interactiveAction = Map.of("name", "send_location");
+            Map<String, Object> interactive = new java.util.LinkedHashMap<>();
+            interactive.put("type",   "location_request_message");
+            interactive.put("body",   interactiveBody);
+            interactive.put("action", interactiveAction);
+
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("to",             destination);
+            payload.put("type",           "interactive");
+            payload.put("recipient_type", "individual");
+            payload.put("interactive",    interactive);
+
+            String json = objectMapper.writeValueAsString(payload);
+
+            log.info("[WhatsApp LocationRequest] Sending interactive location_request_message to {} | URL: {}", destination, url);
+            log.info("[WhatsApp LocationRequest] Payload: {}", json);
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type",              "application/json")
+                    .addHeader("X-AiSensy-Project-API-Pwd", projectApiKey)
+                    .post(RequestBody.create(json, JSON_MEDIA))
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                int code = response.code();
+                String responseBody = response.body() != null ? response.body().string() : "no body";
+                log.info("[WhatsApp LocationRequest] Response {} : {}", code, responseBody);
+
+                if (response.isSuccessful()) {
+                    log.info("[WhatsApp LocationRequest] ✅ Interactive location request sent to {}", destination);
+                    return true;
+                } else {
+                    log.warn("[WhatsApp LocationRequest] ❌ API returned {} for {}: {}", code, destination, responseBody);
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            log.error("[WhatsApp LocationRequest] Exception while sending interactive location request to {}", destination, e);
+            return false;
+        }
     }
 
     // ── Live-Chat (Project) API ────────────────────────────────────────────────
